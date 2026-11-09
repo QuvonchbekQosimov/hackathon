@@ -1,0 +1,61 @@
+name: BAIS checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Hackaton/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: Hackaton/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+      - run: npm audit --audit-level=moderate
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: bais_test
+          POSTGRES_USER: bais_test
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bais_test -d bais_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DB_NAME: bais_test
+      DB_USER: bais_test
+      DB_PASSWORD: test-only-password
+      DB_HOST: localhost
+      DATA_MODE: demo
+      GEMINI_API_KEY: ''
+    defaults:
+      run:
+        working-directory: Hackaton/backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: Hackaton/backend/requirements.lock
+      - run: python -m pip install -r requirements.lock
+      - run: python seed.py
+      - run: python verify_api.py
+      - run: python -m pip install pip-audit
+      - run: python -m pip_audit -r requirements.lock

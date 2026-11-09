@@ -1,0 +1,25 @@
+{
+  "passed": 19,
+  "checks": [
+    "POST /users/register",
+    "GET /users/me",
+    "POST /users/register",
+    "GET /users/me",
+    "POST /users/register",
+    "GET /users/me",
+    "POST /products",
+    "POST /orders",
+    "PUT /orders/bc1a22ef-ddc2-4b7c-8cdc-ac9ace4772c6/accept",
+    "POST /logistics/trips",
+    "POST /logistics/bids",
+    "PUT /logistics/bids/38c88bfc-3ec9-4c66-bcf7-7807fec737d8/accept",
+    "PUT /logistics/trips/ebd3476c-d126-4328-9729-c4d982d873ed/start",
+    "PUT /logistics/trips/ebd3476c-d126-4328-9729-c4d982d873ed/deliver",
+    "PUT /orders/bc1a22ef-ddc2-4b7c-8cdc-ac9ace4772c6/complete",
+    "GET /dashboard",
+    "POST /chat",
+    "POST /users/logout",
+    "GET /users/me"
+  ],
+  "assistant_mode": "gemini"
+}

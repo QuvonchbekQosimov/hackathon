@@ -1,0 +1,7 @@
+venv
+node_modules
+__pycache__
+.env
+*.log
+api-test-report.json
+package*.json

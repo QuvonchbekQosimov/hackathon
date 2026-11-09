@@ -1,153 +1,203 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Package, Search, Filter, LayoutDashboard, LogOut, Zap, ChevronRight } from 'lucide-react';
-import { getProducts } from '../api'; // axios o'rniga shu ulandi
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowUpRight, Package, Search, MapPin } from "lucide-react";
+import { getCatalog } from "../api";
+import { PublicShell, Loading, Empty, ErrorNotice } from "../components/UI";
+import { money } from "../utils";
 
 export default function B2BMarket() {
-  const navigate = useNavigate();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState('Barchasi');
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Kategoriyalar endi qattiq kodlanmaydi, bazaga qarab o'zgaradi
-  const [categories, setCategories] = useState(["Barchasi"]);
-
-  // 1. Backenddan barcha mahsulotlarni FAQAT BIR MARTA tortib kelamiz
+  const [params, setParams] = useSearchParams();
+  const search = params.get("search") || "",
+    category = params.get("category") || "",
+    sort = params.get("sort") || "newest",
+    page = Math.max(1, Number(params.get("page")) || 1);
+  const [draft, setDraft] = useState(search),
+    [result, setResult] = useState({ items: [], categories: [], total: 0 });
+  const [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [retry, setRetry] = useState(0);
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const res = await getProducts(); // getProducts API'dan tortamiz
-        const data = Array.isArray(res.data) ? res.data : [];
-        setProducts(data);
-        
-        // Mahsulotlardagi barcha unik kategoriyalarni terib olamiz
-        const uniqueCategories = ["Barchasi", ...new Set(data.map(p => p.category).filter(Boolean))];
-        setCategories(uniqueCategories);
-      } catch (error) {
-        console.error("Xato:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProducts();
-  }, []);
-
-  const formatMoney = (amount) => amount?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-
-  // 2. Filtrlash va Qidiruvni Frontendning o'zida tezkor bajaramiz
-  const filteredProducts = products.filter(product => {
-    // A) Kategoriya bo'yicha tekshiramiz
-    const matchCategory = category === 'Barchasi' || product.category === category;
-    
-    // B) Qidiruv so'zi bo'yicha tekshiramiz (xavfsiz tekshiruv uchun toLowerCase)
-    const safeName = (product.name || "").toLowerCase();
-    const safeFactory = (product.factory_name || "").toLowerCase();
-    const query = searchQuery.toLowerCase();
-
-    const matchSearch = safeName.includes(query) || safeFactory.includes(query);
-    
-    return matchCategory && matchSearch;
-  });
-
-  const handleLogout = () => { localStorage.clear(); navigate('/'); };
-
+    setDraft(search);
+  }, [search]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    getCatalog(
+      { search, category, sort, page, page_size: 12 },
+      controller.signal,
+    )
+      .then((r) => setResult(r.data))
+      .catch((e) => {
+        if (e.code !== "ERR_CANCELED") setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [search, category, sort, page, retry]);
+  const update = (change) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries({ page: 1, ...change }))
+      v ? next.set(k, String(v)) : next.delete(k);
+    setParams(next);
+  };
+  const pages = Math.max(1, Math.ceil(result.total / 12));
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex selection:bg-blue-200">
-      
-      {/* SIDEBAR */}
-      <aside className="w-64 border-r border-slate-200 bg-white p-6 flex flex-col justify-between shadow-sm relative z-20 shrink-0">
-        <div className="relative z-10">
-          <h1 onClick={handleLogout} className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-800 mb-10 tracking-widest flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-            <Zap className="text-blue-600" size={24} /> BAIS
-          </h1>
-          <nav className="space-y-4">
-            <button onClick={() => navigate('/analytics')} className="w-full flex items-center space-x-3 text-slate-500 hover:text-blue-600 hover:bg-slate-50 p-3 rounded-xl transition-all">
-              <LayoutDashboard size={20} /> <span className="font-bold">AI Tahlil Markazi</span>
-            </button>
-            <button className="w-full flex items-center space-x-3 text-blue-700 bg-blue-50 p-3 rounded-xl border border-blue-100 shadow-sm transition-all">
-              <Package size={20} /><span className="font-bold">B2B Buyurtmalar</span>
-            </button>
-          </nav>
+    <PublicShell>
+      <div className="flex flex-wrap justify-between items-end gap-4 mb-8">
+        <div>
+          <p className="text-blue-600 font-bold text-xs uppercase tracking-widest mb-3">
+            BAIS katalogi
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-black">B2B ulgurji bozor</h1>
+          <p className="text-slate-500 mt-3">
+            Ishlab chiqaruvchilar mahsulotlarini toping va solishtiring.
+          </p>
         </div>
-        <button onClick={handleLogout} className="flex items-center space-x-3 text-slate-500 hover:text-rose-500 transition-all font-medium relative z-10">
-          <LogOut size={20} /><span>Bosh sahifa</span>
-        </button>
-      </aside>
-
-      {/* ASOSIY OYNA */}
-      <main className="flex-1 p-8 overflow-y-auto relative z-10 custom-scrollbar h-screen">
-        <header className="flex justify-between items-center mb-10">
-          <div>
-            <h2 className="text-3xl font-black text-slate-800 mb-2">B2B Ulgurji Bozor</h2>
-            <p className="text-slate-500 text-sm font-medium">Vositachilarsiz to'g'ridan-to'g'ri zavodlardan xarid qiling</p>
-          </div>
-          <div className="flex gap-4">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Mahsulot yoki zavod izlash..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-900 text-sm font-medium rounded-xl pl-11 pr-4 py-3 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none w-72 transition-all focus:w-80 shadow-sm placeholder:text-slate-400" 
-              />
-            </div>
-          </div>
-        </header>
-
-        {/* FILTRLAR */}
-        <div className="flex gap-3 mb-8 overflow-x-auto pb-2 custom-scrollbar">
-          <div className="flex items-center gap-2 text-slate-500 font-bold mr-2"><Filter size={18}/> Kategoriyalar:</div>
-          {categories.map(cat => (
-            <button 
-              key={cat} onClick={() => setCategory(cat)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${category === cat ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600 shadow-sm'}`}
-            >
-              {cat}
-            </button>
+        <span className="text-sm text-slate-500">
+          {result.total} ta mahsulot
+        </span>
+      </div>
+      <div className="panel flex flex-col sm:flex-row gap-3 mb-8">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            update({ search: draft.trim() });
+          }}
+          className="flex gap-2 flex-1"
+        >
+          <label className="relative flex-1">
+            <span className="sr-only">Mahsulot yoki zavod qidirish</span>
+            <Search
+              size={18}
+              className="absolute left-3.5 top-3.5 text-slate-400"
+            />
+            <input
+              className="input pl-10"
+              maxLength={100}
+              placeholder="Mahsulot yoki zavod nomi…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+          </label>
+          <button className="btn-primary">Qidirish</button>
+        </form>
+        <select
+          aria-label="Kategoriya"
+          className="input sm:w-48"
+          value={category}
+          onChange={(e) => update({ category: e.target.value })}
+        >
+          <option value="">Barcha kategoriyalar</option>
+          {result.categories.map((c) => (
+            <option key={c}>{c}</option>
           ))}
-        </div>
-
-        {/* MAHSULOTLAR GRIDI */}
-        {loading ? (
-          <div className="flex justify-center py-20"><Zap className="text-blue-600 animate-pulse" size={40}/></div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-3xl border border-slate-200 border-dashed">
-            <Search size={48} className="mb-4 opacity-50" />
-            <p className="text-lg font-bold">"{searchQuery}" yoki "{category}" bo'yicha hech narsa topilmadi.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <div key={product.id} className="bg-white border border-slate-200 rounded-3xl p-6 hover:border-blue-300 transition-all group flex flex-col justify-between hover:shadow-xl shadow-sm">
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1 rounded-lg">{product.category || "Kategoriya"}</span>
-                    <span className="text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-lg">Zavod narxi</span>
+        </select>
+        <select
+          aria-label="Saralash"
+          className="input sm:w-44"
+          value={sort}
+          onChange={(e) => update({ sort: e.target.value })}
+        >
+          <option value="newest">Eng yangi</option>
+          <option value="price_asc">Narx: arzon avval</option>
+          <option value="price_desc">Narx: qimmat avval</option>
+          <option value="name">Nom bo'yicha</option>
+        </select>
+      </div>
+      <ErrorNotice message={error} retry={() => setRetry((x) => x + 1)} />
+      {loading ? (
+        <Loading />
+      ) : (
+        !error &&
+        (result.items.length ? (
+          <>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {result.items.map((p) => (
+                <article
+                  className="panel flex flex-col hover:border-blue-300 transition-colors"
+                  key={p.id}
+                >
+                  <div className="flex justify-between items-center mb-5">
+                    <span className="w-12 h-12 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl">
+                      <Package size={24} />
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-50 rounded-full px-3 py-1">
+                      {p.category}
+                    </span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-blue-600 transition-colors leading-tight">{product.name}</h3>
-                  <p className="text-sm text-slate-500 mb-5 font-medium">{product.factory_name || "BAIS Zavod"}</p>
-                  
-                  {/* Xavfsiz narxni chiqarish */}
-                  <div className="text-2xl font-black text-emerald-600 mb-5">{formatMoney(product.price || product.factory_price || 0)} <span className="text-xs font-bold text-slate-400">UZS</span></div>
-                </div>
-                
-                <div className="space-y-4 pt-4 border-t border-slate-100">
-                  <p className="text-xs text-slate-500 font-bold">Zaxira: <span className="text-slate-800">{product.stock_quantity || product.stock || 0} dona</span></p>
-                  <button 
-                    onClick={() => navigate(`/product/${product.id}`)} 
-                    className="w-full bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-600 border border-blue-100 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
-                  >
-                    Tahlilni ko'rish <ChevronRight size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+                  <h2 className="font-bold text-lg mb-2">{p.name}</h2>
+                  <p className="text-sm text-slate-500">{p.factory_name}</p>
+                  {p.location && (
+                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-2">
+                      <MapPin size={12} />
+                      {p.location}
+                    </p>
+                  )}
+                  <div className="mt-auto pt-7">
+                    <p className="text-2xl font-black">
+                      {money(p.price)}{" "}
+                      <span className="text-xs text-slate-400 font-medium">
+                        UZS
+                      </span>
+                    </p>
+                    <p
+                      className={`text-xs mt-2 ${p.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}
+                    >
+                      Qoldiq: {p.stock_quantity} ta
+                    </p>
+                    <Link
+                      to={`/product/${p.id}`}
+                      className="btn-secondary w-full mt-5"
+                    >
+                      Batafsil ko'rish
+                      <ArrowUpRight size={16} />
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <nav
+              aria-label="Katalog sahifalari"
+              className="flex justify-center items-center gap-4 mt-8"
+            >
+              <button
+                className="btn-secondary"
+                disabled={page <= 1}
+                onClick={() => update({ page: page - 1 })}
+              >
+                Oldingi
+              </button>
+              <span className="text-sm text-slate-500">
+                {page} / {pages}
+              </span>
+              <button
+                className="btn-secondary"
+                disabled={page >= pages}
+                onClick={() => update({ page: page + 1 })}
+              >
+                Keyingi
+              </button>
+            </nav>
+          </>
+        ) : (
+          <Empty
+            title="Mahsulot topilmadi"
+            description="Qidiruv so'zini yoki kategoriya filtrini o'zgartiring."
+          >
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setDraft("");
+                setParams({});
+              }}
+            >
+              Filtrlarni tozalash
+            </button>
+          </Empty>
+        ))
+      )}
+    </PublicShell>
   );
 }

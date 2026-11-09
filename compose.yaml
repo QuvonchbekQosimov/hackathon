@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vido_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in your environment}
+      APP_DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your environment}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./deployment/init-db.sh:/docker-entrypoint-initdb.d/10-app-user.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d vido_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DB_NAME: vido_db
+      DB_USER: bais_app
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your environment}
+      DB_HOST: db
+      DB_PORT: 5432
+      APP_ENV: ${APP_ENV:-development}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      DATA_MODE: ${DATA_MODE:-live}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+    depends_on:
+      db:
+        condition: service_healthy
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  postgres_data:

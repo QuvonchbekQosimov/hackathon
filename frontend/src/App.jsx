@@ -1,44 +1,84 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  Link,
+} from "react-router-dom";
+import AuthProvider from "./AuthProvider";
+import { useAuth } from "./auth-context";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { Loading, ErrorNotice, PublicShell } from "./components/UI";
 
-// Barcha sahifalarni chaqirib olamiz
-import Home from './pages/Home';
-import PublicAnalytics from './pages/PublicAnalytics';
-import B2BMarket from './pages/B2BMarket';
-import ProductDetail from './pages/ProductDetail';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard'; 
+const Home = lazy(() => import("./pages/Home"));
+const PublicAnalytics = lazy(() => import("./pages/PublicAnalytics"));
+const B2BMarket = lazy(() => import("./pages/B2BMarket"));
+const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 
+function PrivateRoute({ children }) {
+  const { user, loading, error, refresh } = useAuth();
+  const location = useLocation();
+  if (loading) return <Loading />;
+  if (error)
+    return (
+      <PublicShell>
+        <ErrorNotice message={error} retry={refresh} />
+      </PublicShell>
+    );
+  return user ? (
+    children
+  ) : (
+    <Navigate
+      to="/login"
+      replace
+      state={{ from: location.pathname + location.search }}
+    />
+  );
+}
+function NotFound() {
+  return (
+    <PublicShell>
+      <div className="py-20 text-center">
+        <p className="text-blue-600 font-bold">404</p>
+        <h1 className="text-3xl font-bold my-4">Sahifa topilmadi</h1>
+        <Link className="btn-primary" to="/">
+          Bosh sahifa
+        </Link>
+      </div>
+    </PublicShell>
+  );
+}
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        {/* =========================================
-            OCHIQ TARMOQ (Public Pages)
-        ========================================= */}
-        <Route path="/" element={<Home />} />
-        <Route path="/analytics" element={<PublicAnalytics />} />
-        <Route path="/marketplace" element={<B2BMarket />} />
-        <Route path="/product/:id" element={<ProductDetail />} />
-        
-        {/* =========================================
-            AVTORIZATSIYA (Auth Pages)
-        ========================================= */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        
-        {/* =========================================
-            YOPIQ TARMOQ (Private CRM Panel)
-        ========================================= */}
-        <Route path="/dashboard" element={<Dashboard />} /> 
-        
-        {/* =========================================
-            XAVFSIZLIK (404 Fallback)
-            Bazada yo'q manzil yozilsa, bosh sahifaga otadi
-        ========================================= */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <Suspense fallback={<Loading />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/analytics" element={<PublicAnalytics />} />
+              <Route path="/marketplace" element={<B2BMarket />} />
+              <Route path="/product/:id" element={<ProductDetail />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute>
+                    <Dashboard />
+                  </PrivateRoute>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
